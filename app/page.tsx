@@ -83,6 +83,7 @@ const FallingCheese = () => {
 
 export default function Home() {
   const [timelines, setTimelines] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null); // State chứa thông tin Profile
   const [isLoading, setIsLoading] = useState(true);
   const [activeStory, setActiveStory] = useState<any | null>(null);
   
@@ -109,11 +110,11 @@ export default function Home() {
     };
     calculateAge();
 
-    // 2. Kéo dữ liệu từ WordPress Admin (Đã cập nhật link admin.tranlinhchi.com)
+    // 2. Kéo dữ liệu Timeline
     const fetchTimelines = async () => {
       try {
         const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/timeline?_embed");
-        if (!response.ok) throw new Error("Lỗi kết nối API");
+        if (!response.ok) throw new Error("Lỗi kết nối API Timeline");
         const data = await response.json();
         setTimelines(data);
       } catch (error) {
@@ -122,7 +123,23 @@ export default function Home() {
         setIsLoading(false);
       }
     };
+
+    // 3. Kéo dữ liệu Profile Header (Trang: Cấu hình Profile)
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/pages?slug=cau-hinh-profile");
+        if (!response.ok) throw new Error("Lỗi kết nối API Profile");
+        const data = await response.json();
+        if (data && data.length > 0) {
+          setProfile(data[0]);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
     fetchTimelines();
+    fetchProfile();
   }, []);
 
   const stories = [
@@ -173,7 +190,7 @@ export default function Home() {
           
           <div className="w-full h-36 bg-pink-100 relative">
             <img 
-              src="https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=800&q=80" 
+              src={profile?.acf?.anh_cover || "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=800&q=80"} 
               alt="Cover" 
               className="w-full h-full object-cover opacity-80"
             />
@@ -183,7 +200,11 @@ export default function Home() {
           <div className="relative -mt-16 p-1.5 rounded-full bg-gradient-to-tr from-yellow-300 via-pink-300 to-pink-400 mb-3 shadow-lg z-10">
             <div className="w-[110px] h-[110px] bg-white rounded-full p-1">
               <div className="w-full h-full bg-pink-50 rounded-full flex items-center justify-center text-4xl overflow-hidden">
-                <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Cheese&backgroundColor=ffd5dc" alt="Avatar của Cheese" className="w-full h-full object-cover" />
+                <img 
+                  src={profile?.acf?.avatar || "https://api.dicebear.com/7.x/notionists/svg?seed=Cheese&backgroundColor=ffd5dc"} 
+                  alt="Avatar của Cheese" 
+                  className="w-full h-full object-cover" 
+                />
               </div>
             </div>
             <div className="absolute bottom-1 right-1 bg-white rounded-full p-1.5 shadow-sm border border-pink-100 text-sm">🧀</div>
@@ -210,24 +231,34 @@ export default function Home() {
 
           <div className="px-5 w-full mb-6">
             <div className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center">
-              🎀 Thiên thần nhỏ của bố mẹ.<br/>
-              🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.
+              {profile?.acf?.bio || (
+                <>
+                  🎀 Thiên thần nhỏ của bố mẹ.<br/>
+                  🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.
+                </>
+              )}
             </div>
           </div>
 
-          {/* CÁC NÚT MẠNG XÃ HỘI */}
+          {/* CÁC NÚT MẠNG XÃ HỘI CHẠY BẰNG LINK THẬT */}
           <div className="flex gap-3 w-full px-5">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-100 to-pink-100 text-pink-600 py-2.5 rounded-xl font-bold text-sm hover:opacity-80 transition shadow-sm border border-pink-50">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-              Instagram
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-2 bg-slate-800 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-slate-700 transition shadow-sm">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><path d="m9 9 12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-              TikTok
-            </button>
-            <button className="w-14 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition shadow-sm border border-red-100">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
-            </button>
+            {profile?.acf?.link_instagram && (
+              <a href={profile.acf.link_instagram} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-100 to-pink-100 text-pink-600 py-2.5 rounded-xl font-bold text-sm hover:opacity-80 transition shadow-sm border border-pink-50">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                Instagram
+              </a>
+            )}
+            {profile?.acf?.link_tiktok && (
+              <a href={profile.acf.link_tiktok} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-slate-800 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-slate-700 transition shadow-sm">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><path d="m9 9 12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                TikTok
+              </a>
+            )}
+            {profile?.acf?.link_youtube && (
+              <a href={profile.acf.link_youtube} target="_blank" rel="noreferrer" className="w-14 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition shadow-sm border border-red-100">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
+              </a>
+            )}
           </div>
         </header>
 
