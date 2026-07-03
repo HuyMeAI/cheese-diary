@@ -4,12 +4,11 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 // === HÀM HỖ TRỢ HIỂN THỊ LINK NHÚNG (YOUTUBE / INSTAGRAM) ===
 const RenderEmbed = ({ url }: { url: string }) => {
   if (!url) return null;
-
   const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
   if (ytMatch && ytMatch[1]) {
     return (
@@ -18,7 +17,6 @@ const RenderEmbed = ({ url }: { url: string }) => {
       </div>
     );
   }
-
   const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([a-zA-Z0-9_-]+)/);
   if (igMatch && igMatch[1]) {
     return (
@@ -27,7 +25,6 @@ const RenderEmbed = ({ url }: { url: string }) => {
       </div>
     );
   }
-
   return <a href={url} target="_blank" rel="noreferrer" className="mt-3 block text-sm text-pink-500 underline break-all">{url}</a>;
 };
 
@@ -55,13 +52,16 @@ const FallingCheese = () => {
 export default function Home() {
   const [timelines, setTimelines] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
-  const [stories, setStories] = useState<any[]>([]); // Khai báo state lưu Story
+  const [stories, setStories] = useState<any[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
-  const [activeStory, setActiveStory] = useState<any | null>(null);
   const [age, setAge] = useState({ months: 0, days: 0 });
 
+  // STATE ĐIỀU KHIỂN STORY (Instagram Style)
+  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+  const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
+  const [storyProgress, setStoryProgress] = useState<number>(0);
+
   useEffect(() => {
-    // 1. Tính tuổi
     const calculateAge = () => {
       const dob = new Date('2025-07-06');
       const today = new Date();
@@ -77,43 +77,42 @@ export default function Home() {
     };
     calculateAge();
 
-    // 2. Kéo dữ liệu Timeline
     const fetchTimelines = async () => {
       try {
         const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/timeline?_embed");
-        if (!response.ok) throw new Error("Lỗi kết nối API Timeline");
         const data = await response.json();
         setTimelines(data);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (error) { console.error(error); } finally { setIsLoading(false); }
     };
 
-    // 3. Kéo dữ liệu Profile Header
     const fetchProfile = async () => {
       try {
         const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/pages?slug=cau-hinh-profile");
-        if (!response.ok) throw new Error("Lỗi API Profile");
         const data = await response.json();
         if (data && data.length > 0) setProfile(data[0]);
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) { console.error(error); }
     };
 
-    // 4. Kéo dữ liệu Story Nổi Bật từ WordPress
     const fetchStories = async () => {
       try {
-        const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/story?_embed");
-        if (!response.ok) throw new Error("Lỗi API Story");
+        const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/story?_embed&per_page=100");
         const data = await response.json();
-        // reverse() để story đăng trước hiển thị bên trái giống Instagram
-        setStories(data.reverse()); 
-      } catch (error) {
-        console.error(error);
-      }
+        
+        // GỘP NHÓM CÁC STORY CÙNG TÊN LẠI VỚI NHAU
+        const grouped: any[] = [];
+        data.reverse().forEach((post: any) => {
+          const title = post.title.rendered;
+          let group = grouped.find(g => g.title === title);
+          if (!group) {
+            group = { id: post.id, title, icon: post.acf?.icon || "✨", items: [] };
+            grouped.push(group);
+          }
+          const type = post.acf?.loai_story || "image";
+          const mediaUrl = type === "video" ? post.acf?.link_video : (post._embedded?.['wp:featuredmedia']?.[0]?.source_url || "");
+          group.items.push({ type, url: mediaUrl });
+        });
+        setStories(grouped);
+      } catch (error) { console.error(error); }
     };
 
     fetchTimelines();
@@ -121,27 +120,117 @@ export default function Home() {
     fetchStories();
   }, []);
 
+  // --- LOGIC CHUYỂN STORY TỰ ĐỘNG ---
+  const handleNextStory = () => {
+    if (activeStoryIndex === null) return;
+    const currentGroup = stories[activeStoryIndex];
+    if (activeItemIndex < currentGroup.items.length - 1) {
+      setActiveItemIndex(prev => prev + 1); // Chuyển ảnh tiếp theo trong nhóm
+    } else {
+      if (activeStoryIndex < stories.length - 1) {
+        setActiveStoryIndex(prev => prev! + 1); // Đổi sang nhóm Story kế tiếp
+        setActiveItemIndex(0);
+      } else {
+        setActiveStoryIndex(null); // Đã xem hết -> Tắt
+      }
+    }
+  };
+
+  const handlePrevStory = () => {
+    if (activeStoryIndex === null) return;
+    if (activeItemIndex > 0) {
+      setActiveItemIndex(prev => prev - 1);
+    } else {
+      if (activeStoryIndex > 0) {
+        setActiveStoryIndex(prev => prev! - 1);
+        setActiveItemIndex(stories[activeStoryIndex - 1].items.length - 1);
+      }
+    }
+  };
+
+  // Timer cho ảnh (Tự chạy 5s)
+  useEffect(() => {
+    if (activeStoryIndex === null) return;
+    const currentItem = stories[activeStoryIndex].items[activeItemIndex];
+    
+    if (currentItem?.type === 'image') {
+      setStoryProgress(0);
+      const startTime = Date.now();
+      const duration = 5000; // 5 giây
+      const interval = setInterval(() => {
+        const elap = Date.now() - startTime;
+        setStoryProgress(Math.min((elap / duration) * 100, 100));
+        if (elap >= duration) {
+          clearInterval(interval);
+          handleNextStory();
+        }
+      }, 50);
+      return () => clearInterval(interval);
+    } else {
+      setStoryProgress(0); // Video sẽ được update bởi onTimeUpdate của thẻ video
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryIndex, activeItemIndex]);
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FFFDE7] via-[#FFF5F8] to-[#FFE4E1] text-gray-700 relative overflow-hidden pb-20">
       <FallingCheese />
 
-      {/* POP-UP STORY TOÀN MÀN HÌNH */}
+      {/* POP-UP STORY TOÀN MÀN HÌNH (INSTAGRAM STYLE) */}
       <AnimatePresence>
-        {activeStory && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
-            <button onClick={() => setActiveStory(null)} className="absolute top-6 right-6 text-white bg-white/20 p-2 rounded-full hover:bg-white/40">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full max-w-sm aspect-[9/16] bg-gradient-to-b from-pink-200 to-yellow-200 rounded-3xl overflow-hidden relative flex flex-col">
-              <div className="absolute top-4 left-4 flex items-center gap-2 z-10 bg-black/30 px-3 py-1 rounded-full text-white text-sm font-bold backdrop-blur-sm">
-                <span>{activeStory.icon}</span> <span dangerouslySetInnerHTML={{ __html: activeStory.title }} />
+        {activeStoryIndex !== null && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center sm:p-4">
+            
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full h-full sm:h-auto sm:max-w-sm sm:aspect-[9/16] bg-black sm:rounded-3xl overflow-hidden relative flex flex-col">
+              
+              {/* Lớp hiển thị Media (Nằm dưới cùng) */}
+              <div className="absolute inset-0 z-0 bg-gray-900 flex items-center justify-center">
+                {stories[activeStoryIndex].items[activeItemIndex]?.type === 'image' && (
+                   <img src={stories[activeStoryIndex].items[activeItemIndex].url} alt="Story" className="w-full h-full object-cover" />
+                )}
+                {stories[activeStoryIndex].items[activeItemIndex]?.type === 'video' && (
+                   <video 
+                     src={stories[activeStoryIndex].items[activeItemIndex].url} 
+                     autoPlay playsInline 
+                     onEnded={handleNextStory} 
+                     onTimeUpdate={(e: any) => setStoryProgress((e.target.currentTime / e.target.duration) * 100)}
+                     className="w-full h-full object-cover" 
+                   />
+                )}
               </div>
-              {activeStory.type === "image" && <img src={activeStory.media} alt="Story" className="w-full h-full object-cover" />}
-              {activeStory.type === "text" && (
-                <div className="flex-1 flex items-center justify-center p-8 text-center bg-white/80 backdrop-blur-md">
-                  <h2 className="text-2xl font-bold text-pink-500 whitespace-pre-wrap">{activeStory.content}</h2>
+
+              {/* Lớp Bấm Chuyển Sang Trái / Phải (Nằm trên hình, dưới nút) */}
+              <div className="absolute inset-0 z-10 flex">
+                <div className="w-1/3 h-full cursor-pointer" onClick={handlePrevStory}></div>
+                <div className="w-2/3 h-full cursor-pointer" onClick={handleNextStory}></div>
+              </div>
+
+              {/* Lớp Header (Thanh thời gian, Avatar, Tên, Nút X) - Nằm trên cùng z-20 */}
+              <div className="absolute top-0 left-0 right-0 z-20 px-3 pt-4 bg-gradient-to-b from-black/60 to-transparent pb-6">
+                
+                {/* Thanh Progress */}
+                <div className="flex gap-1 mb-3">
+                  {stories[activeStoryIndex].items.map((_: any, idx: number) => (
+                    <div key={idx} className="h-[3px] flex-1 bg-white/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-white" style={{ width: `${idx < activeItemIndex ? 100 : idx === activeItemIndex ? storyProgress : 0}%` }}></div>
+                    </div>
+                  ))}
                 </div>
-              )}
+
+                {/* Thông tin Story & Nút Tắt */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-white text-sm font-bold drop-shadow-md">
+                    <span className="text-xl">{stories[activeStoryIndex].icon}</span>
+                    <span dangerouslySetInnerHTML={{ __html: stories[activeStoryIndex].title }} />
+                  </div>
+                  {/* Nút X giờ đã nằm ở đây! */}
+                  <button onClick={() => setActiveStoryIndex(null)} className="text-white p-1 hover:bg-white/20 rounded-full transition relative z-30">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </div>
+              </div>
+
             </motion.div>
           </motion.div>
         )}
@@ -185,14 +274,10 @@ export default function Home() {
 
           <div className="px-5 w-full mb-6">
             {profile?.acf?.bio ? (
-              <div 
-                className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center [&_a]:text-pink-500 [&_a]:underline"
-                dangerouslySetInnerHTML={{ __html: profile.acf.bio }}
-              />
+              <div className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center [&_a]:text-pink-500 [&_a]:underline" dangerouslySetInnerHTML={{ __html: profile.acf.bio }} />
             ) : (
               <div className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center">
-                🎀 Thiên thần nhỏ của bố mẹ.<br/>
-                🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.
+                🎀 Thiên thần nhỏ của bố mẹ.<br/>🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.
               </div>
             )}
           </div>
@@ -216,93 +301,50 @@ export default function Home() {
           </div>
         </header>
 
-        {/* HIGHLIGHT STORIES ĐỘNG TỪ WORDPRESS */}
+        {/* HIGHLIGHT STORIES */}
         <section className="py-6 border-b-[3px] border-pink-100 border-dotted">
           <div className="flex overflow-x-auto gap-5 px-5 snap-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {stories.length === 0 ? (
                <div className="text-xs text-gray-400 italic text-center w-full">Chưa có Story nào.</div>
             ) : (
-              stories.map((post) => {
-                // Xử lý dữ liệu thô từ WP thành cấu trúc Story Component cần
-                const storyData = {
-                  id: post.id,
-                  title: post.title.rendered,
-                  icon: post.acf?.icon || "✨",
-                  type: post.acf?.loai_story || "image",
-                  content: post.acf?.noi_dung || "",
-                  media: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=400&q=80"
-                };
-
-                return (
-                  <div key={storyData.id} onClick={() => setActiveStory(storyData)} className="flex flex-col items-center gap-2 snap-start cursor-pointer group min-w-[70px]">
-                    <div className="p-[3px] rounded-full bg-gradient-to-tr from-gray-200 to-gray-300 group-hover:from-pink-400 group-hover:to-yellow-400 transition-all duration-300">
-                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-3xl border-[3px] border-white shadow-sm transform group-hover:scale-95 transition-transform">
-                        {storyData.icon}
-                      </div>
+              stories.map((group, index) => (
+                <div key={group.id} onClick={() => { setActiveStoryIndex(index); setActiveItemIndex(0); }} className="flex flex-col items-center gap-2 snap-start cursor-pointer group min-w-[70px]">
+                  <div className="p-[3px] rounded-full bg-gradient-to-tr from-gray-200 to-gray-300 group-hover:from-pink-400 group-hover:to-yellow-400 transition-all duration-300">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-3xl border-[3px] border-white shadow-sm transform group-hover:scale-95 transition-transform">
+                      {group.icon}
                     </div>
-                    <span className="text-xs font-bold text-gray-600 group-hover:text-pink-500 transition-colors text-center w-full whitespace-nowrap overflow-hidden text-ellipsis max-w-[70px]" dangerouslySetInnerHTML={{ __html: storyData.title }} />
                   </div>
-                )
-              })
+                  <span className="text-xs font-bold text-gray-600 group-hover:text-pink-500 transition-colors text-center w-full whitespace-nowrap overflow-hidden text-ellipsis max-w-[70px]" dangerouslySetInnerHTML={{ __html: group.title }} />
+                </div>
+              ))
             )}
           </div>
         </section>
 
         {/* TIMELINE RENDER DỮ LIỆU */}
         <section className="relative px-5 pt-8 pb-12">
-          <div className="absolute left-[36px] top-8 bottom-0 w-8 z-0 opacity-60"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='60' viewBox='0 0 20 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 0 C 20 15, 0 30, 10 45 C 20 60, 0 75, 10 90' fill='transparent' stroke='%23FBCFE8' stroke-width='4' stroke-dasharray='4 4' stroke-linecap='round'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'repeat-y'
-            }}
-          ></div>
-
+          <div className="absolute left-[36px] top-8 bottom-0 w-8 z-0 opacity-60" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='60' viewBox='0 0 20 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 0 C 20 15, 0 30, 10 45 C 20 60, 0 75, 10 90' fill='transparent' stroke='%23FBCFE8' stroke-width='4' stroke-dasharray='4 4' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat-y' }}></div>
           {isLoading ? (
-            <div className="text-center py-10 text-pink-400 font-bold animate-pulse">
-              Đang lấy nhật ký của Cheese... 🧀
-            </div>
+            <div className="text-center py-10 text-pink-400 font-bold animate-pulse">Đang lấy nhật ký của Cheese... 🧀</div>
           ) : timelines.length === 0 ? (
-             <div className="text-center py-10 text-gray-500 font-medium bg-white/50 rounded-2xl border border-white">
-               Bố mẹ chưa đăng bài viết nào cả!
-             </div>
+             <div className="text-center py-10 text-gray-500 font-medium bg-white/50 rounded-2xl border border-white">Bố mẹ chưa đăng bài viết nào cả!</div>
           ) : (
             timelines.map((post: any, index: number) => {
               const embedLink = post.acf?.link_nhung_video || post.acf?.link_nhung; 
               const dateObj = new Date(post.date);
               const formattedDate = `${dateObj.getDate()}/${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`;
               const featuredImage = post._embedded?.['wp:featuredmedia']?.[0]?.source_url;
-
               const dotColor = index % 2 === 0 ? 'bg-yellow-300' : 'bg-pink-300';
               const cardBg = index % 2 === 0 ? 'bg-white/95' : 'bg-gradient-to-br from-[#FFF5F8] to-white';
 
               return (
-                <motion.div 
-                  key={post.id}
-                  initial={{ opacity: 0, y: 80, scale: 0.95 }} 
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }} 
-                  viewport={{ once: true, margin: "-15%" }} 
-                  transition={{ duration: 0.6, type: "spring", bounce: 0.4 }}
-                  className="relative pl-12 mb-10"
-                >
+                <motion.div key={post.id} initial={{ opacity: 0, y: 80, scale: 0.95 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, margin: "-15%" }} transition={{ duration: 0.6, type: "spring", bounce: 0.4 }} className="relative pl-12 mb-10">
                   <div className={`absolute left-[8px] top-4 w-6 h-6 ${dotColor} border-[3px] border-white shadow-md rounded-full z-10`}></div>
-                  
                   <div className={`${cardBg} backdrop-blur-md p-5 rounded-[24px_24px_24px_8px] shadow-[0_4px_20px_-5px_rgba(251,113,133,0.15)] border border-white/80`}>
-                    <span className="text-[11px] font-bold text-pink-500 bg-pink-100/80 px-3 py-1.5 rounded-full mb-3 inline-block shadow-sm">
-                      {formattedDate}
-                    </span>
-                    
+                    <span className="text-[11px] font-bold text-pink-500 bg-pink-100/80 px-3 py-1.5 rounded-full mb-3 inline-block shadow-sm">{formattedDate}</span>
                     <h3 className="font-bold text-[19px] text-gray-800 mb-2 leading-tight" dangerouslySetInnerHTML={{ __html: post.title.rendered }} />
-                    <div 
-                      className="text-[15px] text-gray-600 leading-relaxed [&>p]:mb-2"
-                      dangerouslySetInnerHTML={{ __html: post.content.rendered }}
-                    />
-
-                    {featuredImage && (
-                      <div className="mt-4 rounded-2xl overflow-hidden border-4 border-white shadow-sm">
-                        <img src={featuredImage} alt={post.title.rendered} className="w-full h-auto object-cover" />
-                      </div>
-                    )}
-
+                    <div className="text-[15px] text-gray-600 leading-relaxed [&>p]:mb-2" dangerouslySetInnerHTML={{ __html: post.content.rendered }} />
+                    {featuredImage && <div className="mt-4 rounded-2xl overflow-hidden border-4 border-white shadow-sm"><img src={featuredImage} alt={post.title.rendered} className="w-full h-auto object-cover" /></div>}
                     {embedLink && <RenderEmbed url={embedLink} />}
                   </div>
                 </motion.div>
