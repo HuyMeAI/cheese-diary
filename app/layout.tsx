@@ -10,8 +10,11 @@ const mali = Mali({
 });
 
 export const metadata: Metadata = {
-  title: "Nhật Ký Của Cheese 🧀",
-  description: "Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của bé Trần Linh Chi mỗi ngày.",
+  title: "Cuốn nhật ký của em Cheese iu 🧀",
+  description: "Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của bé Trần Linh Chi ạ.",
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧀</text></svg>",
+  },
 };
 
 export default function RootLayout({
