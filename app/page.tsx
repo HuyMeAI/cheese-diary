@@ -178,17 +178,23 @@ export default function Home() {
               <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Ngày</span>
             </div>
             <div className="bg-pink-100 px-4 py-2 rounded-2xl shadow-sm border-2 border-pink-200 flex flex-col items-center min-w-[75px]">
-              <span className="text-xl font-black text-pink-600">👼🏻</span>
+              <span className="text-xl font-black text-pink-600">👧🏻</span>
               <span className="text-[9px] font-bold text-pink-600 uppercase tracking-wider">Tuổi</span>
             </div>
           </div>
 
           <div className="px-5 w-full mb-6">
-            <div className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center">
-              {profile?.acf?.bio || (
-                <>🎀 Thiên thần nhỏ của bố mẹ.<br/>🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.</>
-              )}
-            </div>
+            {profile?.acf?.bio ? (
+              <div 
+                className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center [&_a]:text-pink-500 [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: profile.acf.bio }}
+              />
+            ) : (
+              <div className="text-sm font-medium text-gray-700 leading-relaxed bg-white/70 p-4 rounded-2xl border border-white shadow-sm text-center">
+                🎀 Thiên thần nhỏ của bố mẹ.<br/>
+                🧸 Nơi lưu giữ những khoảnh khắc ngọt ngào như phô mai của con mỗi ngày.
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 w-full px-5">
