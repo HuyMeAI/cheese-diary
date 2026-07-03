@@ -98,29 +98,32 @@ export default function Home() {
         const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/story?_embed&per_page=100");
         const data = await response.json();
         
-        // PARSE DỮ LIỆU STORY TỪ Ô "DANH SÁCH MEDIA"
+        // PARSE DỮ LIỆU STORY TỪ 5 Ô "MEDIA 1 -> 5"
         const parsedStories = data.reverse().map((post: any) => {
           const items: any[] = [];
           
-          if (post.acf?.danh_sach_media) {
-            // Cắt nội dung thành từng dòng, bỏ dòng trống
-            const links = post.acf.danh_sach_media.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== "");
-            links.forEach((link: string) => {
-              // Nhận diện tự động xem link là ảnh hay video
-              const isVideo = link.match(/\.(mp4|webm|mov)$/i);
-              items.push({ type: isVideo ? 'video' : 'image', url: link });
-            });
-          } else {
-            // Nếu quên nhập thì lấy ảnh đại diện làm dự phòng
+          // Lặp qua 5 slot media mà chúng ta vừa tạo trong ACF
+          for (let i = 1; i <= 5; i++) {
+            const mediaUrl = post.acf?.[`media_${i}`];
+            if (mediaUrl) {
+              // Nhận diện tự động xem file được chọn là ảnh hay video
+              const isVideo = mediaUrl.match(/\.(mp4|webm|mov)$/i);
+              items.push({ type: isVideo ? 'video' : 'image', url: mediaUrl });
+            }
+          }
+
+          // Nếu cả 5 ô đều trống, lấy ảnh đại diện (Featured Image) làm dự phòng
+          if (items.length === 0) {
             const fallbackMedia = post._embedded?.['wp:featuredmedia']?.[0]?.source_url;
             if (fallbackMedia) items.push({ type: 'image', url: fallbackMedia });
+            else items.push({ type: 'image', url: "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=400&q=80" });
           }
 
           return {
             id: post.id,
             title: post.title.rendered,
             icon: post.acf?.icon || "✨",
-            items: items.length > 0 ? items : [{ type: 'image', url: "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=400&q=80" }]
+            items: items
           };
         });
         setStories(parsedStories);
