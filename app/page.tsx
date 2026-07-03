@@ -4,9 +4,9 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 
-// === HÀM HỖ TRỢ HIỂN THỊ LINK NHÚNG (YOUTUBE / INSTAGRAM) ===
+// === HÀM HỖ TRỢ HIỂN THỊ LINK NHÚNG ===
 const RenderEmbed = ({ url }: { url: string }) => {
   if (!url) return null;
   const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
@@ -28,7 +28,7 @@ const RenderEmbed = ({ url }: { url: string }) => {
   return <a href={url} target="_blank" rel="noreferrer" className="mt-3 block text-sm text-pink-500 underline break-all">{url}</a>;
 };
 
-// === HIỆU ỨNG PHÔ MAI RƠI LẤT PHẤT ===
+// === HIỆU ỨNG PHÔ MAI RƠI ===
 const FallingCheese = () => {
   const [cheeses, setCheeses] = useState<{id: number, left: number, animationDuration: number, delay: number, size: number}[]>([]);
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [age, setAge] = useState({ months: 0, days: 0 });
 
-  // STATE ĐIỀU KHIỂN STORY (Instagram Style)
+  // STATE ĐIỀU KHIỂN STORY
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
   const [storyProgress, setStoryProgress] = useState<number>(0);
@@ -98,20 +98,32 @@ export default function Home() {
         const response = await fetch("https://admin.tranlinhchi.com/wp-json/wp/v2/story?_embed&per_page=100");
         const data = await response.json();
         
-        // GỘP NHÓM CÁC STORY CÙNG TÊN LẠI VỚI NHAU
-        const grouped: any[] = [];
-        data.reverse().forEach((post: any) => {
-          const title = post.title.rendered;
-          let group = grouped.find(g => g.title === title);
-          if (!group) {
-            group = { id: post.id, title, icon: post.acf?.icon || "✨", items: [] };
-            grouped.push(group);
+        // PARSE DỮ LIỆU STORY TỪ Ô "DANH SÁCH MEDIA"
+        const parsedStories = data.reverse().map((post: any) => {
+          const items: any[] = [];
+          
+          if (post.acf?.danh_sach_media) {
+            // Cắt nội dung thành từng dòng, bỏ dòng trống
+            const links = post.acf.danh_sach_media.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== "");
+            links.forEach((link: string) => {
+              // Nhận diện tự động xem link là ảnh hay video
+              const isVideo = link.match(/\.(mp4|webm|mov)$/i);
+              items.push({ type: isVideo ? 'video' : 'image', url: link });
+            });
+          } else {
+            // Nếu quên nhập thì lấy ảnh đại diện làm dự phòng
+            const fallbackMedia = post._embedded?.['wp:featuredmedia']?.[0]?.source_url;
+            if (fallbackMedia) items.push({ type: 'image', url: fallbackMedia });
           }
-          const type = post.acf?.loai_story || "image";
-          const mediaUrl = type === "video" ? post.acf?.link_video : (post._embedded?.['wp:featuredmedia']?.[0]?.source_url || "");
-          group.items.push({ type, url: mediaUrl });
+
+          return {
+            id: post.id,
+            title: post.title.rendered,
+            icon: post.acf?.icon || "✨",
+            items: items.length > 0 ? items : [{ type: 'image', url: "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=400&q=80" }]
+          };
         });
-        setStories(grouped);
+        setStories(parsedStories);
       } catch (error) { console.error(error); }
     };
 
@@ -125,13 +137,13 @@ export default function Home() {
     if (activeStoryIndex === null) return;
     const currentGroup = stories[activeStoryIndex];
     if (activeItemIndex < currentGroup.items.length - 1) {
-      setActiveItemIndex(prev => prev + 1); // Chuyển ảnh tiếp theo trong nhóm
+      setActiveItemIndex(prev => prev + 1);
     } else {
       if (activeStoryIndex < stories.length - 1) {
-        setActiveStoryIndex(prev => prev! + 1); // Đổi sang nhóm Story kế tiếp
+        setActiveStoryIndex(prev => prev! + 1);
         setActiveItemIndex(0);
       } else {
-        setActiveStoryIndex(null); // Đã xem hết -> Tắt
+        setActiveStoryIndex(null); // Đã hết Story -> Tắt
       }
     }
   };
@@ -167,7 +179,7 @@ export default function Home() {
       }, 50);
       return () => clearInterval(interval);
     } else {
-      setStoryProgress(0); // Video sẽ được update bởi onTimeUpdate của thẻ video
+      setStoryProgress(0); // Video sẽ update thanh chạy thông qua thuộc tính onTimeUpdate
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStoryIndex, activeItemIndex]);
@@ -177,15 +189,16 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-[#FFFDE7] via-[#FFF5F8] to-[#FFE4E1] text-gray-700 relative overflow-hidden pb-20">
       <FallingCheese />
 
-      {/* POP-UP STORY TOÀN MÀN HÌNH (INSTAGRAM STYLE) */}
+      {/* POP-UP STORY TOÀN MÀN HÌNH */}
       <AnimatePresence>
         {activeStoryIndex !== null && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center sm:p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-2 sm:p-4">
             
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full h-full sm:h-auto sm:max-w-sm sm:aspect-[9/16] bg-black sm:rounded-3xl overflow-hidden relative flex flex-col">
+            {/* KHUNG ẢNH/VIDEO ĐƯỢC CỐ ĐỊNH KÍCH THƯỚC */}
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="w-full max-w-sm aspect-[9/16] bg-gray-900 rounded-3xl overflow-hidden relative flex flex-col shadow-2xl border border-white/10">
               
               {/* Lớp hiển thị Media (Nằm dưới cùng) */}
-              <div className="absolute inset-0 z-0 bg-gray-900 flex items-center justify-center">
+              <div className="absolute inset-0 z-0 flex items-center justify-center">
                 {stories[activeStoryIndex].items[activeItemIndex]?.type === 'image' && (
                    <img src={stories[activeStoryIndex].items[activeItemIndex].url} alt="Story" className="w-full h-full object-cover" />
                 )}
@@ -200,33 +213,34 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Lớp Bấm Chuyển Sang Trái / Phải (Nằm trên hình, dưới nút) */}
+              {/* Lớp Bấm Chuyển Sang Trái / Phải */}
               <div className="absolute inset-0 z-10 flex">
                 <div className="w-1/3 h-full cursor-pointer" onClick={handlePrevStory}></div>
                 <div className="w-2/3 h-full cursor-pointer" onClick={handleNextStory}></div>
               </div>
 
-              {/* Lớp Header (Thanh thời gian, Avatar, Tên, Nút X) - Nằm trên cùng z-20 */}
-              <div className="absolute top-0 left-0 right-0 z-20 px-3 pt-4 bg-gradient-to-b from-black/60 to-transparent pb-6">
+              {/* Lớp Header (Thanh thời gian, Avatar, Tên, NÚT X) */}
+              <div className="absolute top-0 left-0 right-0 z-20 px-4 pt-5 bg-gradient-to-b from-black/60 to-transparent pb-8">
                 
-                {/* Thanh Progress */}
-                <div className="flex gap-1 mb-3">
+                {/* Thanh Progress (Nhỏ gọn giống IG) */}
+                <div className="flex gap-1.5 mb-4">
                   {stories[activeStoryIndex].items.map((_: any, idx: number) => (
-                    <div key={idx} className="h-[3px] flex-1 bg-white/30 rounded-full overflow-hidden">
-                      <div className="h-full bg-white" style={{ width: `${idx < activeItemIndex ? 100 : idx === activeItemIndex ? storyProgress : 0}%` }}></div>
+                    <div key={idx} className="h-0.5 flex-1 bg-white/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-75" style={{ width: `${idx < activeItemIndex ? 100 : idx === activeItemIndex ? storyProgress : 0}%` }}></div>
                     </div>
                   ))}
                 </div>
 
-                {/* Thông tin Story & Nút Tắt */}
+                {/* Thông tin Story & Nút Tắt nằm gọn trong góc ảnh */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-white text-sm font-bold drop-shadow-md">
+                  <div className="flex items-center gap-2 text-white text-[15px] font-bold drop-shadow-md">
                     <span className="text-xl">{stories[activeStoryIndex].icon}</span>
                     <span dangerouslySetInnerHTML={{ __html: stories[activeStoryIndex].title }} />
                   </div>
-                  {/* Nút X giờ đã nằm ở đây! */}
-                  <button onClick={() => setActiveStoryIndex(null)} className="text-white p-1 hover:bg-white/20 rounded-full transition relative z-30">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  
+                  {/* === NÚT X ĐÃ ĐƯỢC CHUYỂN VÀO GÓC ẢNH === */}
+                  <button onClick={() => setActiveStoryIndex(null)} className="text-white p-1.5 bg-black/20 hover:bg-black/50 backdrop-blur-md rounded-full transition relative z-30">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                   </button>
                 </div>
               </div>
@@ -238,7 +252,7 @@ export default function Home() {
 
       <main className="max-w-md mx-auto relative z-10 bg-white/50 backdrop-blur-sm min-h-screen shadow-2xl shadow-pink-100/50 border-x border-white/60">
         
-        {/* HEADER */}
+        {/* HEADER BÊN NGOÀI... (GIỮ NGUYÊN) */}
         <header className="border-b-[3px] border-pink-100 border-dotted flex flex-col items-center pb-6">
           <div className="w-full h-36 bg-pink-100 relative">
             <img src={profile?.acf?.anh_cover || "https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=800&q=80"} alt="Cover" className="w-full h-full object-cover opacity-80" />
@@ -301,7 +315,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* HIGHLIGHT STORIES */}
+        {/* HIGHLIGHT STORIES ĐỘNG TỪ WORDPRESS */}
         <section className="py-6 border-b-[3px] border-pink-100 border-dotted">
           <div className="flex overflow-x-auto gap-5 px-5 snap-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {stories.length === 0 ? (
